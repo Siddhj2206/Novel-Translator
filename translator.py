@@ -5,7 +5,8 @@ import json
 import time
 import google.api_core.exceptions
 import sys
-from datetime import datetime  # Added for timestamps
+from datetime import datetime
+import concurrent.futures  # Added for concurrency
 
 
 # Helper function for timestamped print
@@ -18,7 +19,7 @@ def print_ts(message):
 def translate_text(text, api_key, base_prompt, max_retries=3, delay_seconds=5):
     """Translates text using the Gemini API with retry logic."""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash-preview-04-17')
+    model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
     prompt = f"{base_prompt}\n\n{text}"
 
     for attempt in range(max_retries):
@@ -43,7 +44,11 @@ def translate_text(text, api_key, base_prompt, max_retries=3, delay_seconds=5):
 
 
 def main():
-    try:  # Added for KeyboardInterrupt handling
+    try:
+        MAX_CONCURRENT_TRANSLATIONS = (
+            2  # Configurable number of concurrent translations
+        )
+
         parser = argparse.ArgumentParser(
             description="Translate novel chapters using Gemini API."
         )
@@ -186,30 +191,41 @@ def main():
             os.makedirs(final_translated_folder_path)
             print_ts(f"Created translated folder: {final_translated_folder_path}")
 
-        for filename in os.listdir(final_raw_folder_path):
-            if filename.endswith(".txt"):
-                raw_filepath = os.path.join(final_raw_folder_path, filename)
-                translated_filepath = os.path.join(
-                    final_translated_folder_path, filename
-                )
+        # Use ThreadPoolExecutor for concurrent translations
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=MAX_CONCURRENT_TRANSLATIONS
+        ) as executor:
+            future_to_chapter_info = {}
 
-                # Check if the translated file already exists
-                if os.path.exists(translated_filepath):
-                    print_ts(f"Chapter {filename} already translated. Skipping.")
-                    continue  # Skip to the next file
-
-                with open(raw_filepath, "r", encoding="utf-8") as f:
-                    raw_text = f.read()
-
-                print_ts(f"Translating {filename}...")
-                try:
-                    translated_text = translate_text(
-                        raw_text, final_api_key, final_base_prompt
+            for filename in os.listdir(final_raw_folder_path):
+                if filename.endswith(".txt"):
+                    raw_filepath = os.path.join(final_raw_folder_path, filename)
+                    translated_filepath = os.path.join(
+                        final_translated_folder_path, filename
                     )
-                    # If translation is successful, write the file
+
+                    if os.path.exists(translated_filepath):
+                        print_ts(f"Chapter {filename} already translated. Skipping.")
+                        continue
+
+                    with open(raw_filepath, "r", encoding="utf-8") as f:
+                        raw_text = f.read()
+
+                    print_ts(f"Submitting {filename} for translation...")
+                    future = executor.submit(
+                        translate_text, raw_text, final_api_key, final_base_prompt
+                    )
+                    future_to_chapter_info[future] = (filename, translated_filepath)
+
+            for future in concurrent.futures.as_completed(future_to_chapter_info):
+                filename, translated_filepath = future_to_chapter_info[future]
+                try:
+                    translated_text = future.result()  # Get the translation result
                     with open(translated_filepath, "w", encoding="utf-8") as f:
                         f.write(translated_text)
-                    print_ts(f"Saved translated chapter to {translated_filepath}")
+                    print_ts(
+                        f"Saved translated chapter {filename} to {translated_filepath}"
+                    )
                 except Exception as e:
                     print_ts(
                         f"Could not translate {filename}: {e}. Skipping file creation for this chapter."
