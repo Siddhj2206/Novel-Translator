@@ -19,7 +19,7 @@ def print_ts(message):
 def translate_text(text, api_key, base_prompt, max_retries=3, delay_seconds=5):
     """Translates text using the Gemini API with retry logic."""
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash-preview-04-17")
+    model = genai.GenerativeModel("gemini-2.5-flash-preview-05-20")
     prompt = f"{base_prompt}\n\n{text}"
 
     for attempt in range(max_retries):
@@ -70,7 +70,7 @@ def main():
         )
         parser.add_argument(
             "--base_prompt",
-            default="Translate the following Korean text to English:",
+            default="Translate the following text to English:",
             help="Base prompt for translation. Is overridden by 'base_prompt' in novel's config.json if present.",
         )
 

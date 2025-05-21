@@ -7,7 +7,7 @@ This Python script provides a command-line interface (CLI) to translate novel ch
 - **Batch Translation:** Translates multiple chapter files (`.txt`) from a specified raw chapters folder.
 - **Configurable per Novel:** Uses a `config.json` file within each novel's directory to manage:
   - `base_prompt`: The specific prompt to guide the Gemini API for translation (e.g., tone, style).
-  - `raw_folder`: Relative path to the folder containing raw Korean chapter files.
+  - `raw_folder`: Relative path to the folder containing raw chapter files.
   - `translated_folder`: Relative path to the folder where English translated chapters will be saved.
   - `api_key`: Your Google AI Studio API Key.
 - **CLI Overrides:** Allows overriding `config.json` settings using command-line arguments.
@@ -50,7 +50,7 @@ YourNovelName/
 
 - **`YourNovelName/`**: This is the main directory for your novel. You will point the script to this directory.
 - **`config.json`**: Configuration file for this specific novel.
-- **`raw_chapters/`**: Contains the raw Korean chapter text files.
+- **`raw_chapters/`**: Contains the raw chapter text files.
 - **`translated_chapters/`**: The script will create this folder (if it doesn't exist) and save the translated English chapters here.
 
 ## `config.json` File
@@ -61,7 +61,7 @@ Create a `config.json` file in the root of each novel's directory (`YourNovelNam
 
 ```json
 {
-  "base_prompt": "Translate the following Korean fantasy novel chapter into colloquial English, maintaining a sense of suspense and adventure.",
+  "base_prompt": "Translate the following fantasy novel chapter into colloquial English, maintaining a sense of suspense and adventure.",
   "raw_folder": "raw",
   "translated_folder": "tl",
   "api_key": "YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE"
@@ -131,7 +131,7 @@ options:
   --base_prompt BASE_PROMPT
                         Base prompt for translation. Is overridden by
                         'base_prompt' in novel's config.json if present.
-                        (default: Translate the following Korean text to English:)
+                        (default: Translate the following text to English:)
 ```
 
 ## How it Works
