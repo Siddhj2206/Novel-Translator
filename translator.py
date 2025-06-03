@@ -1,21 +1,10 @@
 #!/usr/bin/env python3
 """
-Novel Chapter Translator CLI Tool
+Novel Translator
 
 This script provides a command-line interface for translating novel chapters using
-the Google Gemini API. It supports sequential translation with smart glossary
-management, retry logic, and per-novel configuration through JSON files.
-
-Features:
-- Sequential translation of multiple .txt files for optimal glossary progression
-- Configurable translation prompts per novel
-- Smart glossary management with progressive learning
-- Automatic retry on API failures
-- Skip already translated chapters
-- Per-novel API key and folder configuration
-
-Author: Novel Translator CLI
-License: MIT
+Gemini. It supports translation with  glossary management, retry logic, and
+per-novel configuration through config files.
 """
 
 import argparse
@@ -30,66 +19,24 @@ import google.generativeai as genai
 
 
 # Configuration constants
-MODEL_NAME = "gemini-2.5-flash-preview-05-20"  # Gemini model to use for translation
-RETRY_ATTEMPTS = 3  # Number of retry attempts for failed API calls
-RETRY_DELAY = 5  # Delay in seconds between retry attempts
-GLOSSARY_INIT_CHAPTERS = 5  # Number of initial chapters to use for glossary generation
-MAX_GLOSSARY_ENTRIES = (
-    1000  # Maximum number of entries to keep in glossary (focused on key terms)
-)
+MODEL_NAME = "gemini-2.5-flash-preview-05-20"
+RETRY_ATTEMPTS = 3
+RETRY_DELAY = 5
+GLOSSARY_INIT_CHAPTERS = 5
+MAX_GLOSSARY_ENTRIES = 1000
 
 
 def log(msg: str):
-    """
-    Log a message with timestamp to stdout.
-
-    Formats and prints a message with the current time in [HH:MM] format.
-    Used throughout the application for consistent logging.
-
-    Args:
-        msg (str): The message to log
-
-    Example:
-        log("Starting translation process")
-        # Output: [14:30] Starting translation process
-    """
+    """Log a message with timestamp to stdout."""
     timestamp = datetime.now().strftime("%H:%M")
     print(f"[{timestamp}] {msg}")
 
 
 class Config:
-    """
-    Configuration manager for novel translation settings.
-
-    This class handles loading configuration from config.json files and resolving
-    final settings by merging CLI arguments, config file values, and defaults.
-
-    The priority order for settings is:
-    1. CLI arguments (highest priority)
-    2. config.json values
-    3. Built-in defaults (lowest priority)
-
-    Attributes:
-        novel_root (Path): Root directory of the novel
-        cli (argparse.Namespace): Parsed CLI arguments
-        config_path (Path): Path to the config.json file
-        raw_config (dict): Raw configuration data from JSON file
-        api_key (str): Resolved Google AI Studio API key
-        base_prompt (str): Resolved translation prompt
-        raw_folder (Path): Resolved path to raw chapter files
-        translated_folder (Path): Resolved path for translated output
-        glossary_path (Path): Path to the glossary.txt file
-        glossary (dict): Current glossary terms and definitions
-    """
+    """Configuration manager for novel translation settings."""
 
     def __init__(self, novel_root: Path, args: argparse.Namespace):
-        """
-        Initialize configuration by loading and resolving all settings.
-
-        Args:
-            novel_root (Path): Path to the novel's root directory
-            args (argparse.Namespace): Parsed command-line arguments
-        """
+        """Initialize configuration by loading and resolving all settings."""
         self.novel_root = novel_root
         self.cli = args
         self._load_config_file()
@@ -99,13 +46,7 @@ class Config:
         self._setup_glossary()
 
     def _load_config_file(self):
-        """
-        Load configuration from config.json file in the novel directory.
-
-        Attempts to load and parse the config.json file. If the file doesn't exist
-        or cannot be parsed, falls back to empty configuration and logs warnings.
-        Sets self.raw_config with the loaded JSON data or empty dict.
-        """
+        """Load configuration from config.json file in the novel directory."""
         self.config_path = self.novel_root / "config.json"
         self.raw_config = {}
         if self.config_path.exists():
@@ -121,16 +62,7 @@ class Config:
             log(f"No config.json at {self.config_path}; using defaults.")
 
     def _resolve_api_key(self):
-        """
-        Resolve the Google AI Studio API key from CLI args or config file.
-
-        Priority order:
-        1. CLI argument --api_key
-        2. "api_key" field in config.json
-
-        Exits the program if no API key is found, as it's required for translation.
-        Sets self.api_key with the resolved API key string.
-        """
+        """Resolve the Google AI Studio API key from CLI args or config file."""
         if self.cli.api_key:
             self.api_key = self.cli.api_key
             log("Using API key from CLI argument.")
@@ -143,18 +75,7 @@ class Config:
             sys.exit(1)
 
     def _resolve_base_prompt(self):
-        """
-        Resolve the base translation prompt from config file, CLI args, or default.
-
-        Priority order:
-        1. "base_prompt" field in config.json (highest priority)
-        2. CLI argument --base_prompt
-        3. Built-in default prompt (lowest priority)
-
-        The base prompt is sent to the Gemini API before each chapter text
-        to instruct how the translation should be performed.
-        Sets self.base_prompt with the resolved prompt string.
-        """
+        """Resolve the base translation prompt from config file, CLI args, or default."""
         if self.raw_config.get("base_prompt"):
             self.base_prompt = self.raw_config["base_prompt"]
             log(f"Using base_prompt from config: '{self.base_prompt}'")
@@ -166,20 +87,7 @@ class Config:
             log(f"Using default base_prompt: '{self.base_prompt}'")
 
     def _resolve_folders(self):
-        """
-        Resolve the raw and translated folder paths from various sources.
-
-        For both raw_folder and translated_folder:
-        Priority order:
-        1. CLI arguments --raw_folder / --translated_folder
-        2. "raw_folder" / "translated_folder" fields in config.json
-        3. Built-in defaults: "raw" and "translated"
-
-        CLI paths can be absolute or relative to current working directory.
-        Config paths are always relative to the novel root directory.
-
-        Sets self.raw_folder and self.translated_folder as resolved Path objects.
-        """
+        """Resolve the raw and translated folder paths from various sources."""
         # Resolve raw folder path
         if self.cli.raw_folder:
             raw = Path(self.cli.raw_folder)
@@ -201,16 +109,7 @@ class Config:
         self.translated_folder = tl.resolve()
 
     def _setup_glossary(self):
-        """
-        Set up glossary path and load existing glossary if available.
-
-        Initializes the glossary system by:
-        1. Setting the glossary file path (glossary.txt in novel root)
-        2. Loading existing glossary from file if it exists
-        3. Initializing empty glossary dict if file doesn't exist
-
-        Sets self.glossary_path and self.glossary attributes.
-        """
+        """Set up glossary path and load existing glossary if available."""
         self.glossary_path = self.novel_root / "glossary.txt"
         self.glossary = self._load_glossary()
 
@@ -220,13 +119,7 @@ class Config:
             log("No existing glossary found - will generate from initial chapters")
 
     def _load_glossary(self) -> dict:
-        """
-        Load glossary entries from glossary.txt file.
-
-        Returns:
-            dict: Dictionary mapping terms to their definitions/descriptions.
-                 Empty dict if file doesn't exist or cannot be parsed.
-        """
+        """Load glossary entries from glossary.txt file."""
         if not self.glossary_path.exists():
             return {}
 
@@ -245,14 +138,7 @@ class Config:
             return {}
 
     def save_glossary(self):
-        """
-        Save current glossary to glossary.txt file.
-
-        Writes the glossary dictionary to file in a simple format:
-        term: definition
-
-        Preserves original order and limits to MAX_GLOSSARY_ENTRIES.
-        """
+        """Save current glossary to glossary.txt file."""
         try:
             # Limit entries if needed (keep first entries, not sorted)
             items = list(self.glossary.items())
@@ -270,13 +156,7 @@ class Config:
             log(f"Warning: Error saving glossary: {e}")
 
     def get_glossary_text(self) -> str:
-        """
-        Get formatted glossary text for inclusion in translation prompts.
-
-        Returns:
-            str: Formatted glossary text ready for AI prompt inclusion.
-                 Empty string if no glossary entries exist.
-        """
+        """Get formatted glossary text for inclusion in translation prompts."""
         if not self.glossary:
             return ""
 
@@ -294,24 +174,7 @@ class Config:
 def generate_glossary_from_text(
     text: str, api_key: str, existing_glossary: dict = None
 ) -> dict:
-    """
-    Generate glossary entries from text using Gemini API.
-
-    Analyzes the provided text to extract ONLY the most critical names and terms
-    that need consistent translation. Focuses on proper nouns and unique concepts
-    that would confuse readers if translated inconsistently.
-
-    Args:
-        text (str): The chapter text to analyze for glossary terms
-        api_key (str): Google AI Studio API key for authentication
-        existing_glossary (dict, optional): Current glossary to avoid duplicates
-
-    Returns:
-        dict: Dictionary of new terms and their definitions/descriptions
-
-    Raises:
-        RuntimeError: If glossary generation fails after retries
-    """
+    """Generate glossary entries from text using Gemini API."""
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(MODEL_NAME)
 
@@ -371,98 +234,6 @@ TEXT TO ANALYZE:
     raise RuntimeError("Glossary generation failed")
 
 
-def legacy_update_glossary_from_text(
-    text: str, api_key: str, current_glossary: dict
-) -> dict:
-    """
-    Legacy function for updating glossary - kept for fallback purposes.
-
-    NOTE: This function is now replaced by the structured output approach
-    in translate_and_extract_terms() which combines translation and glossary
-    extraction in a single API call for better efficiency.
-
-    Args:
-        text (str): New chapter text to analyze
-        api_key (str): Google AI Studio API key for authentication
-        current_glossary (dict): Current glossary dictionary
-
-    Returns:
-        dict: New critical terms to add to the glossary
-    """
-    try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(MODEL_NAME)
-
-        existing_terms = list(current_glossary.keys())
-        existing_text = (
-            f"\n\nExisting glossary terms (don't repeat): {', '.join(existing_terms)}"
-            if existing_terms
-            else ""
-        )
-
-        prompt = f"""Analyze this new chapter and identify ONLY new critical terms that are missing from the existing glossary and absolutely need consistent translation. Be EXTREMELY selective - only add:
-
-1. **New major character names** that will appear frequently
-2. **New important place names** that are central to the story
-3. **New unique magical/fantasy concepts** that are story-specific
-4. **New significant organizations/factions** with proper names
-
-CRITICAL: Include original language names in brackets if visible in the text.
-
-Skip minor characters, common terms, or anything already covered by existing glossary.
-
-Format exactly like this:
-NewTerm [OriginalName]: Brief context
-AnotherNewTerm: Brief context
-
-Be conservative - when in doubt, DON'T include it.{existing_text}
-
-TEXT TO ANALYZE:
-{text}"""
-
-        response = model.generate_content(prompt)
-        result_text = response.text.strip()
-
-        # Parse the response into a dictionary
-        new_terms = {}
-        for line in result_text.split("\n"):
-            if line.strip() and ":" in line:
-                term, definition = line.split(":", 1)
-                term = term.strip()
-                definition = definition.strip()
-                if term and definition:
-                    new_terms[term] = definition
-
-        # Filter out terms that already exist (case-insensitive and partial matching)
-        existing_lower = {k.lower(): k for k in current_glossary.keys()}
-        filtered_terms = {}
-
-        for term, definition in new_terms.items():
-            # Check if term or its base form already exists
-            term_lower = term.lower()
-            base_term = (
-                term.split("[")[0].strip().lower() if "[" in term else term_lower
-            )
-
-            if (
-                term_lower not in existing_lower
-                and base_term not in existing_lower
-                and not any(
-                    base_term in existing.lower() for existing in existing_lower
-                )
-            ):
-                filtered_terms[term] = definition
-
-        if filtered_terms:
-            log(f"Found {len(filtered_terms)} new critical glossary terms")
-
-        return filtered_terms
-
-    except Exception as e:
-        log(f"Warning: Failed to update glossary: {e}")
-        return {}
-
-
 def translate_and_extract_terms(
     text: str,
     api_key: str,
@@ -470,29 +241,7 @@ def translate_and_extract_terms(
     glossary_text: str = "",
     existing_glossary: dict = None,
 ) -> tuple[str, dict]:
-    """
-    Translate text and extract new glossary terms using structured output in a single API call.
-
-    This function handles both translation and glossary extraction by:
-    1. Configuring the Gemini API with the provided API key
-    2. Creating a generative model with structured output schema
-    3. Combining translation and glossary extraction in one request
-    4. Making API calls with retry logic for reliability
-    5. Returning both translated text and new glossary terms
-
-    Args:
-        text (str): The raw chapter text to translate
-        api_key (str): Google AI Studio API key for authentication
-        base_prompt (str): Instructions for how to translate (tone, style, etc.)
-        glossary_text (str, optional): Formatted glossary for translation consistency
-        existing_glossary (dict, optional): Current glossary to avoid duplicates
-
-    Returns:
-        tuple[str, dict]: (translated_text, new_glossary_terms)
-
-    Raises:
-        RuntimeError: If all retry attempts fail or unexpected errors occur
-    """
+    """Translate text and extract new glossary terms using structured output in a single API call."""
     genai.configure(api_key=api_key)
 
     # Define the structured output schema
@@ -545,6 +294,12 @@ def translate_and_extract_terms(
 
 {glossary_text}
 
+FORMATTING REQUIREMENTS:
+- Preserve the original paragraph structure and line breaks
+- Maintain proper spacing between paragraphs
+- Keep dialogue formatting intact
+- Do NOT merge paragraphs into one large block of text
+
 ADDITIONAL TASK: After translating, identify any NEW critical terms in the original text that should be added to the glossary. Be extremely selective - only include:
 1. New major character names that will appear frequently
 2. New important place names central to the story
@@ -557,6 +312,12 @@ TEXT TO TRANSLATE:
 {text}"""
     else:
         prompt = f"""{base_prompt}
+
+FORMATTING REQUIREMENTS:
+- Preserve the original paragraph structure and line breaks
+- Maintain proper spacing between paragraphs
+- Keep dialogue formatting intact
+- Do NOT merge paragraphs into one large block of text
 
 ADDITIONAL TASK: After translating, identify any critical terms in the original text that should be in a glossary for translation consistency. Be extremely selective - only include:
 1. Major character names that will appear frequently
@@ -576,6 +337,9 @@ TEXT TO TRANSLATE:
 
             translation = result.get("translation", "")
             new_terms_array = result.get("new_glossary_terms", [])
+
+            # Post-process translation to ensure proper formatting
+            translation = post_process_translation(translation)
 
             # Convert array format to dictionary and filter existing terms
             new_terms = {}
@@ -631,27 +395,48 @@ TEXT TO TRANSLATE:
     raise RuntimeError("Translation and glossary extraction failed")
 
 
+def post_process_translation(text: str) -> str:
+    """Post-process translated text to ensure proper formatting and paragraph structure."""
+    if not text or not text.strip():
+        return text
+
+    # Split into lines and process
+    lines = text.split("\n")
+    processed_lines = []
+
+    for line in lines:
+        line = line.strip()
+        if line:
+            processed_lines.append(line)
+        else:
+            # Preserve empty lines for paragraph breaks
+            processed_lines.append("")
+
+    # Join lines back together
+    result = "\n".join(processed_lines)
+
+    # Ensure we don't have too many consecutive empty lines
+    while "\n\n\n" in result:
+        result = result.replace("\n\n\n", "\n\n")
+
+    # Ensure the text doesn't start or end with excessive whitespace
+    result = result.strip()
+
+    # If the result appears to be one massive paragraph (no line breaks),
+    # try to add some structure based on sentence patterns
+    if "\n" not in result and len(result) > 500:
+        import re
+
+        # Add line breaks after sentences that are followed by capital letters
+        result = re.sub(r"([.!?])\s+([A-Z])", r"\1\n\n\2", result)
+        # Add breaks after dialogue patterns
+        result = re.sub(r'([.!?]")\s+([A-Z])', r"\1\n\n\2", result)
+
+    return result
+
+
 def parse_args() -> argparse.Namespace:
-    """
-    Parse and validate command-line arguments.
-
-    Sets up the argument parser with all available CLI options and returns
-    the parsed arguments. This function defines the command-line interface
-    for the translation tool.
-
-    Returns:
-        argparse.Namespace: Parsed command-line arguments containing:
-            - novel_directory: Required path to novel root directory
-            - api_key: Optional Google AI Studio API key
-            - raw_folder: Optional path to raw chapter files
-            - translated_folder: Optional path for translated output
-            - base_prompt: Optional translation instruction prompt
-
-    Note:
-        All optional arguments can override corresponding values in config.json.
-        The novel_directory argument is required and should contain config.json
-        and the chapter folders.
-    """
+    """Parse and validate command-line arguments."""
     parser = argparse.ArgumentParser(
         description="Translate novel chapters using Gemini API."
     )
@@ -688,33 +473,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main():
-    """
-    Main entry point for the novel translation CLI tool.
-
-    This function orchestrates the entire translation process:
-    1. Parse command-line arguments and validate novel directory
-    2. Load and resolve configuration settings
-    3. Validate the raw chapters folder exists
-    4. Create the translated output folder if needed
-    5. Generate or load glossary for translation consistency
-    6. Process all .txt files sequentially for optimal glossary progression
-    7. Update glossary after each chapter with new terms
-    8. Save translated content to the output folder
-
-    Sequential processing ensures each chapter benefits from glossary updates
-    made during translation of previous chapters, maintaining consistency.
-
-    Error Handling:
-    - Exits if novel directory or raw folder doesn't exist
-    - Logs and continues if individual translations fail
-    - Creates output directory automatically if missing
-
-    File Processing:
-    - Processes .txt files in alphabetical order
-    - Preserves original filenames in translated output
-    - Uses UTF-8 encoding for all file operations
-    - Skips files that already exist in translated folder
-    """
+    """Main entry point for the novel translation CLI tool."""
     # Parse command-line arguments and validate novel directory
     args = parse_args()
     novel_root = Path(args.novel_directory).resolve()
@@ -759,14 +518,11 @@ def main():
             continue
 
         try:
-            # Read the raw chapter content
             content = txt_file.read_text(encoding="utf-8")
             log(f"Translating: {txt_file.name}")
 
-            # Get current glossary text for this translation
             glossary_text = "" if args.no_glossary else cfg.get_glossary_text()
 
-            # Translate the chapter and extract new glossary terms in one call
             translated_content, new_terms = translate_and_extract_terms(
                 content,
                 cfg.api_key,
@@ -775,11 +531,9 @@ def main():
                 cfg.glossary if not args.no_glossary else None,
             )
 
-            # Save the translated result
             dest_file.write_text(translated_content, encoding="utf-8")
             log(f"Saved translation: {dest_file.name}")
 
-            # Update glossary with new terms found during translation (if not disabled)
             if not args.no_glossary and new_terms:
                 cfg.glossary.update(new_terms)
                 cfg.save_glossary()
@@ -799,19 +553,7 @@ def main():
 
 
 def generate_initial_glossary(cfg: Config):
-    """
-    Generate initial glossary from the first few chapters of the novel.
-
-    Analyzes the first GLOSSARY_INIT_CHAPTERS chapter files to create
-    an initial glossary of critical terms for translation consistency.
-
-    Args:
-        cfg (Config): Configuration object containing paths and settings
-
-    Raises:
-        RuntimeError: If glossary generation fails
-    """
-    # Get first few chapter files for glossary generation
+    """Generate initial glossary from the first few chapters of the novel."""
     txt_files = sorted(cfg.raw_folder.glob("*.txt"))
     if not txt_files:
         log("No chapter files found for glossary generation")
@@ -833,7 +575,6 @@ def generate_initial_glossary(cfg: Config):
 
     log(f"Generating glossary from {len(init_files)} initial chapters...")
 
-    # Generate and save initial glossary
     initial_glossary = generate_glossary_from_text(
         combined_text, cfg.api_key, cfg.glossary
     )
@@ -847,12 +588,6 @@ def generate_initial_glossary(cfg: Config):
 
 
 if __name__ == "__main__":
-    """
-    Entry point when script is run directly.
-
-    Handles graceful shutdown on Ctrl+C interruption and ensures the main
-    function is only called when the script is executed directly (not imported).
-    """
     try:
         main()
     except KeyboardInterrupt:
