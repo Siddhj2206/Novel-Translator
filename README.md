@@ -13,7 +13,7 @@ This script provides a command-line interface for translating novel chapters usi
 
 1. **Install Dependencies:**
    ```bash
-   pip install -r requirements.txt
+   uv sync
    ```
 
 2. **Get a Google AI Studio API Key**
@@ -45,16 +45,19 @@ Create `config.json` in your novel directory:
 
 ```bash
 # Basic usage
-python translator.py /path/to/YourNovel
+uv run translator.py /path/to/YourNovel
 
 # With custom API key
-python translator.py /path/to/YourNovel --api_key YOUR_KEY
+uv run translator.py /path/to/YourNovel --api_key YOUR_KEY
 
 # Regenerate glossary
-python translator.py /path/to/YourNovel --regenerate_glossary
+uv run translator.py /path/to/YourNovel --regenerate_glossary
 
 # Disable glossary
-python translator.py /path/to/YourNovel --no_glossary
+uv run translator.py /path/to/YourNovel --no_glossary
+
+# Skip glossary review prompt
+uv run translator.py /path/to/YourNovel --skip_glossary_review
 ```
 
 ## Arguments
@@ -66,6 +69,7 @@ python translator.py /path/to/YourNovel --no_glossary
 - `--base_prompt` - Override translation prompt
 - `--regenerate_glossary` - Rebuild glossary from scratch
 - `--no_glossary` - Disable glossary usage
+- `--skip_glossary_review` - Skip user confirmation after generating initial glossary
 
 ## Glossary
 
@@ -76,7 +80,7 @@ The tool automatically creates a `glossary.txt` file with critical terms for tra
 - **Preserves original names** in brackets: `Akira [明]: Main character`
 - **Focused on essentials**: Character names, places, unique concepts
 
-Use `--regenerate_glossary` to rebuild or `--no_glossary` to disable.
+Use `--regenerate_glossary` to rebuild, `--no_glossary` to disable, or `--skip_glossary_review` to bypass the review prompt.
 
 **Note:**
 The glossary may get bloated over time as gemini likes to add everything to it even though it has been told to only add the essentials. It is advised to clean up the glossary.txt file from time to time.

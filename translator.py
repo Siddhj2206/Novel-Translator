@@ -469,6 +469,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Disable glossary usage for this translation session.",
     )
+    parser.add_argument(
+        "--skip_glossary_review",
+        action="store_true",
+        help="Skip user confirmation after generating initial glossary.",
+    )
     return parser.parse_args()
 
 
@@ -497,7 +502,7 @@ def main():
     if args.regenerate_glossary or (not cfg.glossary and not args.no_glossary):
         log("Generating initial glossary from first chapters...")
         try:
-            generate_initial_glossary(cfg)
+            generate_initial_glossary(cfg, args.skip_glossary_review)
         except Exception as e:
             log(f"Warning: Failed to generate glossary: {e}")
 
@@ -552,7 +557,7 @@ def main():
         log(f"Translation complete. Final glossary contains {len(cfg.glossary)} terms.")
 
 
-def generate_initial_glossary(cfg: Config):
+def generate_initial_glossary(cfg: Config, skip_review: bool = False):
     """Generate initial glossary from the first few chapters of the novel."""
     txt_files = sorted(cfg.raw_folder.glob("*.txt"))
     if not txt_files:
@@ -583,6 +588,46 @@ def generate_initial_glossary(cfg: Config):
         cfg.glossary.update(initial_glossary)
         cfg.save_glossary()
         log(f"Generated initial glossary with {len(initial_glossary)} terms")
+
+        # Display the generated glossary for user review
+        print("\n" + "=" * 60)
+        print("INITIAL GLOSSARY GENERATED")
+        print("=" * 60)
+        print(f"Glossary saved to: {cfg.glossary_path}")
+        print(f"Total terms: {len(initial_glossary)}")
+        print("\nGenerated terms:")
+        for term, definition in initial_glossary.items():
+            print(f"  {term}: {definition}")
+
+        print("\n" + "=" * 60)
+        print("Please review the glossary file and make any necessary corrections.")
+        print("You can edit the glossary file directly to fix any naming errors.")
+        print("=" * 60)
+
+        # Wait for user confirmation unless skipped
+        if not skip_review:
+            while True:
+                user_input = (
+                    input("\nProceed with translation using this glossary? (y/n): ")
+                    .strip()
+                    .lower()
+                )
+                if user_input in ["y", "yes"]:
+                    log("Proceeding with translation...")
+                    # Reload glossary in case user made manual edits
+                    cfg.glossary = cfg._load_glossary()
+                    log(f"Reloaded glossary with {len(cfg.glossary)} terms")
+                    break
+                elif user_input in ["n", "no"]:
+                    print(
+                        "Translation cancelled. Please edit the glossary file and run again."
+                    )
+                    sys.exit(0)
+                else:
+                    print("Please enter 'y' for yes or 'n' for no.")
+        else:
+            log("Skipping glossary review (--skip_glossary_review flag used)")
+
     else:
         log("Warning: No glossary terms generated from initial chapters")
 
