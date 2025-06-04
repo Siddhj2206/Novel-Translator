@@ -24,6 +24,8 @@ RETRY_ATTEMPTS = 3
 RETRY_DELAY = 5
 GLOSSARY_INIT_CHAPTERS = 5
 MAX_GLOSSARY_ENTRIES = 1000
+MAX_NEW_TERMS_PER_CHAPTER = 10
+MAX_NEW_TERMS_PER_CHAPTER_STRICT = 10
 
 
 def log(msg: str):
@@ -185,13 +187,24 @@ def generate_glossary_from_text(
         else ""
     )
 
-    prompt = f"""Analyze this novel text and identify ONLY the most critical proper nouns and unique terms that MUST be translated consistently. Be VERY selective - include only:
+    prompt = f"""Analyze this novel text and identify ONLY the absolute most essential proper nouns that MUST appear in a glossary. Be EXTREMELY restrictive - only include terms that meet ALL these criteria:
 
-1. **Character names** - Main characters, important side characters (not generic titles like "guard" or "merchant")
-2. **Place names** - Specific cities, kingdoms, regions, landmarks (not generic terms like "forest" or "mountain")
-3. **Unique magical/fantasy terms** - Special abilities, systems, concepts unique to this world (not common words)
-4. **Important organizations** - Named guilds, orders, factions (not generic terms like "army")
-5. **Significant artifacts/items** - Named weapons, magical items, important objects
+1. The term appears multiple times OR is clearly a main character/location
+2. The term has a specific non-English name that needs consistent translation
+3. Mistranslating this term would significantly confuse readers
+
+INCLUDE ONLY:
+- **Main character names** (protagonists, major recurring characters only)
+- **Major location names** (primary settings, important cities/kingdoms only)
+- **Core unique concepts** (only if they're central plot elements with specific names)
+
+EXCLUDE EVERYTHING ELSE including:
+- Side characters mentioned once or twice
+- Generic titles (lord, king, master, etc.)
+- Common fantasy terms (magic, sword, guild, etc.)
+- Minor locations or places mentioned in passing
+- Descriptive terms that can be translated normally
+- Any term that doesn't have a specific non-English original name
 
 CRITICAL: For each term, if the original non-English name appears in the text, include it in brackets.
 
@@ -199,7 +212,7 @@ Format your response exactly like this:
 EnglishName [OriginalName]: Brief context for translation consistency
 AnotherTerm: Brief context (if no original name visible)
 
-Be extremely selective. Only include terms that would cause confusion if translated inconsistently. Skip common fantasy terms, generic titles, and ordinary objects.{existing_text}
+Only add 1-3 terms maximum per chapter unless there are truly many main characters introduced. When in doubt, DON'T add it.{existing_text}
 
 TEXT TO ANALYZE:
 {text}"""
@@ -240,6 +253,7 @@ def translate_and_extract_terms(
     base_prompt: str,
     glossary_text: str = "",
     existing_glossary: dict = None,
+    strict_mode: bool = False,
 ) -> tuple[str, dict]:
     """Translate text and extract new glossary terms using structured output in a single API call."""
     genai.configure(api_key=api_key)
@@ -300,13 +314,24 @@ FORMATTING REQUIREMENTS:
 - Keep dialogue formatting intact
 - Do NOT merge paragraphs into one large block of text
 
-ADDITIONAL TASK: After translating, identify any NEW critical terms in the original text that should be added to the glossary. Be extremely selective - only include:
-1. New major character names that will appear frequently
-2. New important place names central to the story
-3. New unique magical/fantasy concepts specific to this story
-4. New significant organizations/factions with proper names
+ADDITIONAL TASK: After translating, identify any NEW absolutely essential terms that must be added to the glossary. Be EXTREMELY restrictive - only include terms that meet ALL criteria:
+1. Has a specific non-English name requiring consistent translation
+2. Will definitely appear again (main characters/major locations only)
+3. Would cause significant reader confusion if translated inconsistently
 
-Include original language names in brackets if visible. Format new terms as an array of objects with "term" and "definition" fields.{existing_terms_text}
+INCLUDE ONLY:
+- New main character names (not side characters)
+- New major location names (primary settings only)
+- New core story concepts with specific names (only if central to plot)
+
+EXCLUDE:
+- Any character mentioned briefly or in passing
+- Generic titles or common terms
+- Minor locations
+- Anything without a specific original non-English name
+- Terms that can be translated normally
+
+Aim for 0-1 new terms maximum per chapter. When uncertain, DON'T add it. Include original language names in brackets if visible. Format new terms as an array of objects with "term" and "definition" fields.{existing_terms_text}
 
 TEXT TO TRANSLATE:
 {text}"""
@@ -319,13 +344,24 @@ FORMATTING REQUIREMENTS:
 - Keep dialogue formatting intact
 - Do NOT merge paragraphs into one large block of text
 
-ADDITIONAL TASK: After translating, identify any critical terms in the original text that should be in a glossary for translation consistency. Be extremely selective - only include:
-1. Major character names that will appear frequently
-2. Important place names central to the story
-3. Unique magical/fantasy concepts specific to this story
-4. Significant organizations/factions with proper names
+ADDITIONAL TASK: After translating, identify any absolutely essential terms that must be in a glossary. Be EXTREMELY restrictive - only include terms that meet ALL criteria:
+1. Has a specific non-English name requiring consistent translation
+2. Will definitely appear again (main characters/major locations only)
+3. Would cause significant reader confusion if translated inconsistently
 
-Include original language names in brackets if visible. Format terms as an array of objects with "term" and "definition" fields.{existing_terms_text}
+INCLUDE ONLY:
+- Main character names (not side characters)
+- Major location names (primary settings only)
+- Core story concepts with specific names (only if central to plot)
+
+EXCLUDE:
+- Any character mentioned briefly
+- Generic titles or common terms
+- Minor locations
+- Anything without a specific original non-English name
+- Terms that can be translated normally
+
+Aim for 0-1 terms maximum for the entire chapter. When uncertain, DON'T add it. Include original language names in brackets if visible. Format terms as an array of objects with "term" and "definition" fields.{existing_terms_text}
 
 TEXT TO TRANSLATE:
 {text}"""
@@ -343,6 +379,116 @@ TEXT TO TRANSLATE:
 
             # Convert array format to dictionary and filter existing terms
             new_terms = {}
+            filtered_terms = []
+
+            # Common terms to exclude from glossary
+            excluded_terms = {
+                "magic",
+                "sword",
+                "guild",
+                "king",
+                "queen",
+                "lord",
+                "lady",
+                "master",
+                "knight",
+                "warrior",
+                "mage",
+                "priest",
+                "merchant",
+                "guard",
+                "soldier",
+                "captain",
+                "general",
+                "princess",
+                "prince",
+                "duke",
+                "count",
+                "baron",
+                "noble",
+                "commoner",
+                "peasant",
+                "inn",
+                "tavern",
+                "shop",
+                "market",
+                "street",
+                "road",
+                "path",
+                "forest",
+                "mountain",
+                "river",
+                "lake",
+                "sea",
+                "ocean",
+                "village",
+                "town",
+                "city",
+                "kingdom",
+                "empire",
+                "castle",
+                "palace",
+                "tower",
+                "wall",
+                "gate",
+                "door",
+                "window",
+                "room",
+                "hall",
+                "church",
+                "temple",
+                "shrine",
+                "school",
+                "academy",
+                "library",
+                "hospital",
+                "prison",
+                "weapon",
+                "armor",
+                "shield",
+                "bow",
+                "arrow",
+                "spear",
+                "axe",
+                "dagger",
+                "staff",
+                "potion",
+                "scroll",
+                "book",
+                "letter",
+                "map",
+                "key",
+                "coin",
+                "gold",
+                "silver",
+                "monster",
+                "demon",
+                "devil",
+                "angel",
+                "god",
+                "goddess",
+                "spirit",
+                "ghost",
+                "soul",
+                "fire",
+                "water",
+                "earth",
+                "air",
+                "wind",
+                "ice",
+                "lightning",
+                "light",
+                "dark",
+                "power",
+                "strength",
+                "speed",
+                "skill",
+                "ability",
+                "technique",
+                "method",
+                "way",
+            }
+
             if existing_glossary:
                 existing_lower = {k.lower(): k for k in existing_glossary.keys()}
 
@@ -358,6 +504,10 @@ TEXT TO TRANSLATE:
                             else term_lower
                         )
 
+                        # Check if term is in excluded list
+                        if base_term in excluded_terms:
+                            continue
+
                         if (
                             term_lower not in existing_lower
                             and base_term not in existing_lower
@@ -366,14 +516,36 @@ TEXT TO TRANSLATE:
                                 for existing in existing_lower
                             )
                         ):
-                            new_terms[term] = definition
+                            filtered_terms.append((term, definition))
             else:
-                # No existing glossary, add all terms
+                # No existing glossary, consider all terms
                 for item in new_terms_array:
                     term = item.get("term", "").strip()
                     definition = item.get("definition", "").strip()
                     if term and definition:
-                        new_terms[term] = definition
+                        base_term = (
+                            term.split("[")[0].strip().lower()
+                            if "[" in term
+                            else term.lower()
+                        )
+
+                        # Check if term is in excluded list
+                        if base_term not in excluded_terms:
+                            filtered_terms.append((term, definition))
+
+            # Limit number of new terms per chapter based on mode
+            max_terms = (
+                MAX_NEW_TERMS_PER_CHAPTER_STRICT
+                if strict_mode
+                else MAX_NEW_TERMS_PER_CHAPTER
+            )
+            for term, definition in filtered_terms[:max_terms]:
+                new_terms[term] = definition
+
+            if len(filtered_terms) > max_terms:
+                log(
+                    f"Limited new glossary terms to {max_terms} out of {len(filtered_terms)} suggested terms"
+                )
 
             return translation, new_terms
 
@@ -474,6 +646,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip user confirmation after generating initial glossary.",
     )
+    parser.add_argument(
+        "--strict_glossary",
+        action="store_true",
+        help="Use stricter glossary filtering (max 1 new term per chapter).",
+    )
     return parser.parse_args()
 
 
@@ -534,6 +711,7 @@ def main():
                 cfg.base_prompt,
                 glossary_text,
                 cfg.glossary if not args.no_glossary else None,
+                args.strict_glossary,
             )
 
             dest_file.write_text(translated_content, encoding="utf-8")
@@ -585,8 +763,157 @@ def generate_initial_glossary(cfg: Config, skip_review: bool = False):
     )
 
     if initial_glossary:
-        cfg.glossary.update(initial_glossary)
+        # Apply stricter filtering to initial glossary
+        filtered_glossary = {}
+
+        # Sort by frequency of occurrence in text for better prioritization
+        text_lower = combined_text.lower()
+        term_scores = []
+
+        for term, definition in initial_glossary.items():
+            # Extract base term (without brackets)
+            base_term = term.split("[")[0].strip() if "[" in term else term
+
+            # Count occurrences of the term
+            count = text_lower.count(base_term.lower())
+
+            # Score based on occurrence count and whether it has original name
+            has_original = "[" in term
+            score = count * (2 if has_original else 1)
+
+            term_scores.append((term, definition, count, score))
+
+        # Sort by score and take only the most important terms
+        term_scores.sort(key=lambda x: x[3], reverse=True)
+
+        # Limit initial glossary size more aggressively
+        max_initial_terms = min(20, len(term_scores))  # Cap at 20 terms
+
+        # Common terms to exclude from glossary
+        excluded_terms = {
+            "magic",
+            "sword",
+            "guild",
+            "king",
+            "queen",
+            "lord",
+            "lady",
+            "master",
+            "knight",
+            "warrior",
+            "mage",
+            "priest",
+            "merchant",
+            "guard",
+            "soldier",
+            "captain",
+            "general",
+            "princess",
+            "prince",
+            "duke",
+            "count",
+            "baron",
+            "noble",
+            "commoner",
+            "peasant",
+            "inn",
+            "tavern",
+            "shop",
+            "market",
+            "street",
+            "road",
+            "path",
+            "forest",
+            "mountain",
+            "river",
+            "lake",
+            "sea",
+            "ocean",
+            "village",
+            "town",
+            "city",
+            "kingdom",
+            "empire",
+            "castle",
+            "palace",
+            "tower",
+            "wall",
+            "gate",
+            "door",
+            "window",
+            "room",
+            "hall",
+            "church",
+            "temple",
+            "shrine",
+            "school",
+            "academy",
+            "library",
+            "hospital",
+            "prison",
+            "weapon",
+            "armor",
+            "shield",
+            "bow",
+            "arrow",
+            "spear",
+            "axe",
+            "dagger",
+            "staff",
+            "potion",
+            "scroll",
+            "book",
+            "letter",
+            "map",
+            "key",
+            "coin",
+            "gold",
+            "silver",
+            "monster",
+            "demon",
+            "devil",
+            "angel",
+            "god",
+            "goddess",
+            "spirit",
+            "ghost",
+            "soul",
+            "fire",
+            "water",
+            "earth",
+            "air",
+            "wind",
+            "ice",
+            "lightning",
+            "light",
+            "dark",
+            "power",
+            "strength",
+            "speed",
+            "skill",
+            "ability",
+            "technique",
+            "method",
+            "way",
+        }
+
+        for term, definition, count, score in term_scores[:max_initial_terms]:
+            base_term = (
+                term.split("[")[0].strip().lower() if "[" in term else term.lower()
+            )
+
+            # Only include terms that appear multiple times or have clear original names
+            # and are not in the excluded list
+            if (count >= 2 or "[" in term) and base_term not in excluded_terms:
+                filtered_glossary[term] = definition
+
+        cfg.glossary.update(filtered_glossary)
         cfg.save_glossary()
+
+        if len(filtered_glossary) < len(initial_glossary):
+            log(
+                f"Filtered initial glossary from {len(initial_glossary)} to {len(filtered_glossary)} essential terms"
+            )
         log(f"Generated initial glossary with {len(initial_glossary)} terms")
 
         # Display the generated glossary for user review

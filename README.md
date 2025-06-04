@@ -58,6 +58,9 @@ uv run translator.py /path/to/YourNovel --no_glossary
 
 # Skip glossary review prompt
 uv run translator.py /path/to/YourNovel --skip_glossary_review
+
+# Use strict glossary filtering (max 1 new term per chapter)
+uv run translator.py /path/to/YourNovel --strict_glossary
 ```
 
 ## Arguments
@@ -70,6 +73,7 @@ uv run translator.py /path/to/YourNovel --skip_glossary_review
 - `--regenerate_glossary` - Rebuild glossary from scratch
 - `--no_glossary` - Disable glossary usage
 - `--skip_glossary_review` - Skip user confirmation after generating initial glossary
+- `--strict_glossary` - Use stricter glossary filtering (max 1 new term per chapter)
 
 ## Glossary
 
@@ -82,5 +86,35 @@ The tool automatically creates a `glossary.txt` file with critical terms for tra
 
 Use `--regenerate_glossary` to rebuild, `--no_glossary` to disable, or `--skip_glossary_review` to bypass the review prompt.
 
+## Glossary Management
+
+The translator has been improved to be much more restrictive about adding terms to the glossary:
+
+- **Automatic filtering** of common fantasy terms (sword, magic, king, etc.)
+- **Strict limits** on new terms per chapter (2 by default, 1 with `--strict_glossary`)
+- **Smart prioritization** based on term frequency and original language names
+- **Enhanced prompts** that strongly discourage unnecessary additions
+
+### Cleaning Existing Glossaries
+
+If you have an existing bloated glossary, use the cleanup utility:
+
+```bash
+# Preview what would be removed
+uv run cleanup_glossary.py /path/to/YourNovel --dry-run
+
+# Clean the glossary (creates backup automatically)
+uv run cleanup_glossary.py /path/to/YourNovel
+
+# Clean without creating backup
+uv run cleanup_glossary.py /path/to/YourNovel --no-backup
+```
+
+The cleanup tool removes:
+- Common fantasy terms (weapons, titles, generic locations)
+- Terms with generic descriptions
+- Low-value entries that don't need translation consistency
+- Preserves terms with original language names in brackets
+
 **Note:**
-The glossary may get bloated over time as gemini likes to add everything to it even though it has been told to only add the essentials. It is advised to clean up the glossary.txt file from time to time.
+With the improved filtering, Gemini should now add far fewer unnecessary terms. Use `--strict_glossary` for even more aggressive filtering if needed.
