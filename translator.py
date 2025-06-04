@@ -16,8 +16,6 @@ from openai import OpenAI
 
 
 # Configuration constants
-MODEL_NAME = "gemini-2.5-flash-preview-05-20"
-PROVIDER_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 RETRY_ATTEMPTS = 3
 RETRY_DELAY = 5
 GLOSSARY_INIT_CHAPTERS = 5
@@ -25,117 +23,31 @@ MAX_GLOSSARY_ENTRIES = 1000
 MAX_NEW_TERMS_PER_CHAPTER = 10
 MAX_NEW_TERMS_PER_CHAPTER_STRICT = 1
 
-# Common terms to exclude from glossary
-EXCLUDED_TERMS = {
-    # Basic fantasy terms
-    "magic",
-    "sword",
-    "guild",
-    "king",
-    "queen",
-    "lord",
-    "lady",
-    "master",
-    "knight",
-    "warrior",
-    "mage",
-    "priest",
-    "merchant",
-    "guard",
-    "soldier",
-    "captain",
-    "general",
-    "princess",
-    "prince",
-    "duke",
-    "count",
-    "baron",
-    "noble",
-    "commoner",
-    "peasant",
-    # Places and structures
-    "inn",
-    "tavern",
-    "shop",
-    "market",
-    "street",
-    "road",
-    "path",
-    "forest",
-    "mountain",
-    "river",
-    "lake",
-    "sea",
-    "ocean",
-    "village",
-    "town",
-    "city",
-    "kingdom",
-    "empire",
-    "castle",
-    "palace",
-    "tower",
-    "wall",
-    "gate",
-    "door",
-    "window",
-    "room",
-    "hall",
-    "church",
-    "temple",
-    "shrine",
-    "school",
-    "academy",
-    "library",
-    "hospital",
-    "prison",
-    # Items and equipment
-    "weapon",
-    "armor",
-    "shield",
-    "bow",
-    "arrow",
-    "spear",
-    "axe",
-    "dagger",
-    "staff",
-    "potion",
-    "scroll",
-    "book",
-    "letter",
-    "map",
-    "key",
-    "coin",
-    "gold",
-    "silver",
-    # Creatures and concepts
-    "monster",
-    "demon",
-    "devil",
-    "angel",
-    "god",
-    "goddess",
-    "spirit",
-    "ghost",
-    "soul",
-    "fire",
-    "water",
-    "earth",
-    "air",
-    "wind",
-    "ice",
-    "lightning",
-    "light",
-    "dark",
-    "power",
-    "strength",
-    "speed",
-    "skill",
-    "ability",
-    "technique",
-    "method",
-    "way",
+# Provider configurations
+PROVIDERS = {
+    "gemini": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "default_model": "gemini-2.5-flash-preview-05-20",
+    },
+    "openai": {
+        "base_url": "https://api.openai.com/v1/",
+        "default_model": "gpt-4.1-nano-2025-04-14",
+    },
+    "anthropic": {
+        "base_url": "https://api.anthropic.com/v1/",
+        "default_model": "claude-sonnet-4-20250514",
+    },
+    "other": {
+        "base_url": None,  # Must be provided in config
+        "default_model": None,  # Must be provided in config
+    },
 }
+
+# Default configuration
+DEFAULT_PROVIDER = "gemini"
+DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20"
+
+
 
 # JSON schema for structured output
 TRANSLATION_SCHEMA = {
@@ -183,6 +95,7 @@ class Config:
         self.cli = args
         self._load_config_file()
         self._resolve_api_key()
+        self._resolve_provider_and_model()
         self._resolve_base_prompt()
         self._resolve_folders()
         self._setup_glossary()
@@ -208,6 +121,39 @@ class Config:
         if not self.api_key:
             log("Error: API key required. Provide via --api_key or config.json")
             sys.exit(1)
+
+    def _resolve_provider_and_model(self) -> None:
+        """Resolve provider and model from config file or use defaults."""
+        # Get provider from config, default to DEFAULT_PROVIDER
+        provider_name = self.file.get("provider", DEFAULT_PROVIDER).lower()
+
+        # Validate provider
+        if provider_name not in PROVIDERS:
+            log(
+                f"Error: Unknown provider '{provider_name}'. Available providers: {list(PROVIDERS.keys())}"
+            )
+            sys.exit(1)
+
+        self.provider = provider_name
+        provider_config = PROVIDERS[provider_name]
+
+        # Handle "other" provider - requires custom base_url and model
+        if provider_name == "other":
+            self.base_url = self.file.get("base_url")
+            self.model = self.file.get("model")
+
+            if not self.base_url:
+                log("Error: 'other' provider requires 'base_url' in config.json")
+                sys.exit(1)
+            if not self.model:
+                log("Error: 'other' provider requires 'model' in config.json")
+                sys.exit(1)
+        else:
+            # Get model from config or use provider's default
+            self.model = self.file.get("model", provider_config["default_model"])
+            self.base_url = provider_config["base_url"]
+
+        log(f"Using provider: {self.provider}, model: {self.model}")
 
     def _resolve_base_prompt(self) -> None:
         """Resolve base prompt from CLI args or config file."""
@@ -249,6 +195,8 @@ class Config:
 
         if self.use_glossary:
             self._load_glossary()
+        else:
+            self.glossary = {}
 
     def _load_glossary(self) -> None:
         """Load existing glossary from file."""
@@ -301,9 +249,9 @@ class Config:
         )
 
 
-def create_openai_client(api_key: str) -> OpenAI:
-    """Create and return an OpenAI client configured for Gemini."""
-    return OpenAI(api_key=api_key, base_url=PROVIDER_BASE_URL)
+def create_openai_client(api_key: str, base_url: str) -> OpenAI:
+    """Create and return an OpenAI client configured for the specified provider."""
+    return OpenAI(api_key=api_key, base_url=base_url)
 
 
 def build_translation_prompt(
@@ -377,10 +325,6 @@ def filter_new_terms(
         term_lower = term.lower()
         base_term = term.split("[")[0].strip().lower() if "[" in term else term_lower
 
-        # Check if term is in excluded list
-        if base_term in EXCLUDED_TERMS:
-            continue
-
         # Check if term already exists
         if existing_glossary:
             if (
@@ -401,14 +345,14 @@ def filter_new_terms(
 
 def translate_and_extract_terms(
     text: str,
-    api_key: str,
+    config: "Config",
     base_prompt: str,
     glossary_text: str = "",
     existing_glossary: Optional[Dict[str, str]] = None,
     strict_mode: bool = False,
 ) -> Tuple[str, Dict[str, str]]:
     """Translate text and extract new glossary terms using structured output in a single API call."""
-    client = create_openai_client(api_key)
+    client = create_openai_client(config.api_key, config.base_url)
     existing_terms = list(existing_glossary.keys()) if existing_glossary else []
     prompt = build_translation_prompt(
         base_prompt, text, glossary_text, existing_terms, strict_mode
@@ -417,7 +361,7 @@ def translate_and_extract_terms(
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
             response = client.chat.completions.create(
-                model=MODEL_NAME,
+                model=config.model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={
                     "type": "json_schema",
@@ -468,10 +412,10 @@ def translate_and_extract_terms(
 
 
 def generate_glossary_from_text(
-    text: str, api_key: str, existing_glossary: Optional[Dict[str, str]] = None
+    text: str, config: "Config", existing_glossary: Optional[Dict[str, str]] = None
 ) -> Dict[str, str]:
-    """Generate glossary entries from text"""
-    client = create_openai_client(api_key)
+    """Generate glossary terms from the given text using AI."""
+    client = create_openai_client(config.api_key, config.base_url)
     existing_terms = list(existing_glossary.keys()) if existing_glossary else []
     existing_text = (
         f"\n\nExisting glossary terms (don't repeat these): {', '.join(existing_terms)}"
@@ -512,7 +456,7 @@ TEXT TO ANALYZE:
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
             response = client.chat.completions.create(
-                model=MODEL_NAME, messages=[{"role": "user", "content": prompt}]
+                model=config.model, messages=[{"role": "user", "content": prompt}]
             )
             result_text = response.choices[0].message.content.strip()
 
@@ -629,7 +573,7 @@ def generate_initial_glossary(config: Config) -> None:
         return
 
     try:
-        new_glossary = generate_glossary_from_text(combined_text, config.api_key)
+        new_glossary = generate_glossary_from_text(combined_text, config)
         config.glossary.update(new_glossary)
 
         if new_glossary:
@@ -669,7 +613,7 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--api_key",
-        help="Google AI Studio API Key (overrides config).",
+        help="API key for the selected provider (overrides config).",
     )
 
     parser.add_argument(
@@ -770,7 +714,7 @@ def main() -> None:
             glossary_text = config.get_glossary_text()
             translation, new_terms = translate_and_extract_terms(
                 content,
-                config.api_key,
+                config,
                 config.base_prompt,
                 glossary_text,
                 config.glossary,

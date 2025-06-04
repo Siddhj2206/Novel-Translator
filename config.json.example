@@ -1,0 +1,57 @@
+{
+  "api_key": "YOUR_API_KEY_HERE",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash-preview-05-20",
+  "base_prompt": "Translate this novel chapter from Japanese to natural, fluent English.",
+  "raw_folder": "raw",
+  "translated_folder": "translated"
+}
+
+// Alternative provider configurations:
+
+// For OpenAI:
+// {
+//   "api_key": "YOUR_OPENAI_API_KEY",
+//   "provider": "openai",
+//   "model": "gpt-4o-mini",
+//   "base_prompt": "Translate this novel chapter from Japanese to natural, fluent English.",
+//   "raw_folder": "raw",
+//   "translated_folder": "translated"
+// }
+
+// For Anthropic:
+// {
+//   "api_key": "YOUR_ANTHROPIC_API_KEY", 
+//   "provider": "anthropic",
+//   "model": "claude-3-5-haiku-20241022",
+//   "base_prompt": "Translate this novel chapter from Japanese to natural, fluent English.",
+//   "raw_folder": "raw",
+//   "translated_folder": "translated"
+// }
+
+// For custom providers/endpoints:
+// {
+//   "api_key": "YOUR_CUSTOM_API_KEY",
+//   "provider": "other",
+//   "base_url": "https://your-custom-endpoint.com/v1/",
+//   "model": "your-custom-model-name",
+//   "base_prompt": "Translate this novel chapter from Japanese to natural, fluent English.",
+//   "raw_folder": "raw",
+//   "translated_folder": "translated"
+// }
+
+// For local LLM servers (like Ollama):
+// {
+//   "api_key": "dummy_key",
+//   "provider": "other", 
+//   "base_url": "http://localhost:11434/v1/",
+//   "model": "llama3.2:3b",
+//   "base_prompt": "Translate this novel chapter from Japanese to natural, fluent English.",
+//   "raw_folder": "raw",
+//   "translated_folder": "translated"
+// }
+
+// Minimal config (uses Gemini defaults):
+// {
+//   "api_key": "YOUR_GEMINI_API_KEY"
+// }
