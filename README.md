@@ -88,8 +88,6 @@ Use `--regenerate_glossary` to rebuild, `--no_glossary` to disable, or `--skip_g
 
 ## Glossary Management
 
-The translator has been improved to be much more restrictive about adding terms to the glossary:
-
 - **Automatic filtering** of common fantasy terms (sword, magic, king, etc.)
 - **Strict limits** on new terms per chapter (2 by default, 1 with `--strict_glossary`)
 - **Smart prioritization** based on term frequency and original language names
@@ -117,4 +115,4 @@ The cleanup tool removes:
 - Preserves terms with original language names in brackets
 
 **Note:**
-With the improved filtering, Gemini should now add far fewer unnecessary terms. Use `--strict_glossary` for even more aggressive filtering if needed.
+With the better filtering, Gemini should now add far fewer unnecessary terms. Use `--strict_glossary` for even more aggressive filtering if needed.

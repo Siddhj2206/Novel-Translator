@@ -470,7 +470,7 @@ def translate_and_extract_terms(
 def generate_glossary_from_text(
     text: str, api_key: str, existing_glossary: Optional[Dict[str, str]] = None
 ) -> Dict[str, str]:
-    """Generate glossary entries from text using OpenAI SDK with Gemini API."""
+    """Generate glossary entries from text"""
     client = create_openai_client(api_key)
     existing_terms = list(existing_glossary.keys()) if existing_glossary else []
     existing_text = (
@@ -657,7 +657,7 @@ def generate_initial_glossary(config: Config) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Translate novel chapters using Gemini API via OpenAI SDK.",
+        description="Translate novel chapters",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
