@@ -12,7 +12,17 @@ from pathlib import Path
 
 
 def load_glossary(glossary_path: Path) -> dict:
-    """Load glossary from file into a dictionary."""
+    """
+    Load glossary from a text file into a dictionary.
+
+    Args:
+        glossary_path: Path to the glossary file.
+                       Each line should be in "term: definition" format.
+
+    Returns:
+        A dictionary of glossary terms {term: definition}.
+        Returns an empty dictionary if the file is not found or on error.
+    """
     glossary = {}
     
     if not glossary_path.exists():
@@ -24,6 +34,7 @@ def load_glossary(glossary_path: Path) -> dict:
             for line in f:
                 line = line.strip()
                 if line and ':' in line:
+                    # Split only on the first colon to handle definitions that might contain colons
                     term, definition = line.split(':', 1)
                     term = term.strip()
                     definition = definition.strip()
@@ -36,14 +47,23 @@ def load_glossary(glossary_path: Path) -> dict:
 
 
 def save_glossary(glossary: dict, glossary_path: Path, backup: bool = True):
-    """Save cleaned glossary back to file."""
+    """
+    Save the glossary dictionary back to a text file.
+
+    Args:
+        glossary: The dictionary of glossary terms to save.
+        glossary_path: Path to the glossary file.
+        backup: If True, creates a backup of the existing file before overwriting.
+    """
     if backup and glossary_path.exists():
+        # Create a backup file, e.g., glossary.txt -> glossary.txt.backup
         backup_path = glossary_path.with_suffix('.txt.backup')
         glossary_path.rename(backup_path)
         print(f"Created backup: {backup_path}")
     
     try:
         with open(glossary_path, 'w', encoding='utf-8') as f:
+            # Save terms sorted alphabetically for consistency
             for term, definition in sorted(glossary.items()):
                 f.write(f"{term}: {definition}\n")
         print(f"Saved cleaned glossary: {glossary_path}")
@@ -115,48 +135,73 @@ def get_excluded_terms() -> set:
     }
 
 
-def clean_glossary(glossary: dict, excluded_terms: set, min_occurrences: int = 1) -> dict:
-    """Clean glossary by removing common terms and low-value entries."""
+def clean_glossary(glossary: dict, excluded_terms: set, min_occurrences: int = 1) -> tuple[dict, list[str]]:
+    """
+    Clean glossary by removing common terms and entries with generic descriptions.
+
+    Args:
+        glossary: The input glossary dictionary {term: definition}.
+        excluded_terms: A set of common terms (lowercase) to exclude.
+        min_occurrences: Minimum occurrences to keep a term.
+                         NOTE: This parameter is parsed from CLI but NOT YET IMPLEMENTED
+                         in the current filtering logic of this function.
+
+    Returns:
+        A tuple containing:
+            - cleaned_glossary (dict): The glossary after removing unwanted terms.
+            - removed_terms (list): A list of strings describing removed terms and reasons.
+    """
     cleaned = {}
-    removed_terms = []
+    removed_terms_log = [] # Log of terms removed and why
+
+    # NOTE: The 'min_occurrences' parameter is parsed from CLI arguments but is not
+    # currently used in this function's filtering logic. Future implementation could use it.
     
     for term, definition in glossary.items():
-        # Extract base term (without brackets)
+        # Extract base term (lowercase, without brackets) for exclusion checks
+        # e.g., "Example Term [Original]" -> "example term"
         base_term = term.split('[')[0].strip().lower() if '[' in term else term.lower()
         
-        # Check if term should be excluded
         should_exclude = False
+        reason = ""
         
-        # Check against excluded terms list
+        # Rule 1: Check against the hardcoded list of common excluded terms
         if base_term in excluded_terms:
             should_exclude = True
-            removed_terms.append(f"{term} (common term)")
+            reason = "common term"
         
-        # Check for generic descriptions that suggest non-essential terms
+        # Rule 2: Check for generic descriptions that often indicate non-essential terms
         definition_lower = definition.lower()
         generic_indicators = [
             'a type of', 'a kind of', 'general term', 'common', 'ordinary',
             'simple', 'basic', 'regular', 'normal', 'standard', 'typical',
             'generic', 'minor character', 'side character', 'background',
-            'mentioned briefly', 'appears once'
+            'mentioned briefly', 'appears once', 'example of'
         ]
-        
-        if any(indicator in definition_lower for indicator in generic_indicators):
+        if not should_exclude and any(indicator in definition_lower for indicator in generic_indicators):
             should_exclude = True
-            removed_terms.append(f"{term} (generic description)")
+            reason = "generic description"
         
-        # Keep terms with original language names (they're usually important)
+        # Rule 3: Override - Always keep terms that have an original language name in brackets
+        # This is a heuristic assuming such terms are specific and important proper nouns.
         if '[' in term and ']' in term:
+            if should_exclude: # If it was marked for exclusion, log that it's being kept
+                print(f"INFO: Keeping term '{term}' due to original name override, despite reason: {reason}")
             should_exclude = False
         
-        # Keep if not excluded
-        if not should_exclude:
+        if should_exclude:
+            removed_terms_log.append(f"'{term}' (Reason: {reason})")
+        else:
             cleaned[term] = definition
-    
-    return cleaned, removed_terms
+
+    return cleaned, removed_terms_log
 
 
 def main():
+    """
+    Main entry point for the glossary cleanup script.
+    Parses arguments, loads glossary, cleans it, and saves the result.
+    """
     parser = argparse.ArgumentParser(description="Clean up bloated glossary files")
     parser.add_argument("novel_directory", help="Path to novel directory containing glossary.txt")
     parser.add_argument("--no-backup", action="store_true", help="Don't create backup file")
@@ -186,28 +231,38 @@ def main():
     print(f"Original glossary contains {len(original_glossary)} terms")
     
     # Clean glossary
-    excluded_terms = get_excluded_terms()
-    cleaned_glossary, removed_terms = clean_glossary(original_glossary, excluded_terms, args.min_occurrences)
+    excluded_terms_set = get_excluded_terms()
+    cleaned_glossary, removed_terms_log = clean_glossary(
+        original_glossary,
+        excluded_terms_set,
+        args.min_occurrences # Pass min_occurrences, though it's noted as unused in clean_glossary
+    )
     
-    print(f"Cleaned glossary contains {len(cleaned_glossary)} terms")
-    print(f"Removed {len(removed_terms)} terms:")
-    
-    # Show what would be removed
-    for removed in removed_terms:
-        print(f"  - {removed}")
+    print(f"\nCleaned glossary would contain {len(cleaned_glossary)} terms.")
+    if removed_terms_log:
+        print(f"Terms that would be removed ({len(removed_terms_log)}):")
+        for entry in removed_terms_log:
+            print(f"  - {entry}")
+    else:
+        print("No terms identified for removal based on current criteria.")
     
     if args.dry_run:
         print("\nDry run complete. No files were modified.")
     else:
-        if len(removed_terms) > 0:
-            response = input(f"\nRemove {len(removed_terms)} terms from glossary? (y/N): ")
-            if response.lower().startswith('y'):
+        # Proceed with saving if there are changes and user confirms
+        if len(original_glossary) == len(cleaned_glossary):
+            print("\nNo changes to save. Glossary is already effectively clean or criteria didn't remove anything.")
+            sys.exit(0)
+
+        if removed_terms_log: # Only ask for confirmation if terms were actually flagged for removal
+            response = input(f"\nSave changes and remove {len(removed_terms_log)} terms from glossary? (y/N): ").strip().lower()
+            if response.startswith('y'):
                 save_glossary(cleaned_glossary, glossary_path, backup=not args.no_backup)
                 print("Glossary cleanup complete!")
             else:
-                print("Cleanup cancelled.")
-        else:
-            print("No terms to remove. Glossary is already clean!")
+                print("Cleanup cancelled by user.")
+        else: # Should ideally be caught by the len check above, but as a fallback.
+            print("\nNo terms were identified for removal. Nothing to save.")
 
 
 if __name__ == "__main__":
