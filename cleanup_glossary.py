@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """
-Glossary Cleanup Utility
-
-This script helps clean up bloated glossary.txt files by removing common terms
-that don't need to be in the glossary for translation consistency.
+Cleans glossary.txt by removing common/generic terms and low-occurrence entries.
+Helps maintain translation consistency by pruning non-essential terms.
+If a "raw" subdirectory with .txt files exists, uses it for term occurrence counts.
 """
 
 import argparse
@@ -13,15 +12,13 @@ from pathlib import Path
 
 def load_glossary(glossary_path: Path) -> dict:
     """
-    Load glossary from a text file into a dictionary.
+    Load glossary from a text file.
 
     Args:
-        glossary_path: Path to the glossary file.
-                       Each line should be in "term: definition" format.
+        glossary_path: Path to the glossary file (e.g., "term: definition" per line).
 
     Returns:
-        A dictionary of glossary terms {term: definition}.
-        Returns an empty dictionary if the file is not found or on error.
+        A dictionary {term: definition}. Empty if file not found or error.
     """
     glossary = {}
     
@@ -48,16 +45,16 @@ def load_glossary(glossary_path: Path) -> dict:
 
 def save_glossary(glossary: dict, glossary_path: Path, backup: bool = True):
     """
-    Save the glossary dictionary back to a text file.
+    Save glossary dictionary to a text file.
 
     Args:
-        glossary: The dictionary of glossary terms to save.
-        glossary_path: Path to the glossary file.
-        backup: If True, creates a backup of the existing file before overwriting.
+        glossary: Glossary {term: definition} to save.
+        glossary_path: Path to the output glossary file.
+        backup: If True, backup existing file to glossary_path.backup.
     """
     if backup and glossary_path.exists():
-        # Create a backup file, e.g., glossary.txt -> glossary.txt.backup
-        backup_path = glossary_path.with_suffix('.txt.backup')
+        # Create a backup, e.g., glossary.txt -> glossary.txt.backup
+        backup_path = glossary_path.with_suffix(glossary_path.suffix + '.backup') # Handles .txt.backup correctly
         glossary_path.rename(backup_path)
         print(f"Created backup: {backup_path}")
     
@@ -135,59 +132,90 @@ def get_excluded_terms() -> set:
     }
 
 
-def clean_glossary(glossary: dict, excluded_terms: set, min_occurrences: int = 1) -> tuple[dict, list[str]]:
+def count_term_occurrences(novel_text: str, glossary_terms: list[str]) -> dict[str, int]:
     """
-    Clean glossary by removing common terms and entries with generic descriptions.
+    Count occurrences of each glossary term (case-insensitive) in the novel text.
+    For terms like "Name [Original]", uses "Name" for searching.
 
     Args:
-        glossary: The input glossary dictionary {term: definition}.
-        excluded_terms: A set of common terms (lowercase) to exclude.
-        min_occurrences: Minimum occurrences to keep a term.
-                         NOTE: This parameter is parsed from CLI but NOT YET IMPLEMENTED
-                         in the current filtering logic of this function.
+        novel_text: Full novel text.
+        glossary_terms: List of terms from the glossary.
 
     Returns:
-        A tuple containing:
-            - cleaned_glossary (dict): The glossary after removing unwanted terms.
-            - removed_terms (list): A list of strings describing removed terms and reasons.
+        Dictionary {original term: count}.
+    """
+    term_counts = {}
+    if not novel_text: # Handle None or empty string
+        return term_counts
+
+    novel_text_lower = novel_text.lower() # Case-insensitive search
+
+    for term in glossary_terms:
+        # Use part before "[" as base term for searching, e.g., "Name" from "Name [Original]"
+        base_search_term = term.split('[', 1)[0].strip() if '[' in term else term
+        base_search_term_lower = base_search_term.lower()
+
+        count = novel_text_lower.count(base_search_term_lower)
+        term_counts[term] = count
+
+    return term_counts
+
+
+def clean_glossary(glossary: dict, excluded_terms: set, term_occurrences: dict[str, int], min_occurrences: int = 1) -> tuple[dict, list[str]]:
+    """
+    Filter glossary based on exclusion rules and minimum occurrences.
+
+    Args:
+        glossary: Input glossary {term: definition}.
+        excluded_terms: Set of common terms (lowercase) to exclude.
+        term_occurrences: {term: count} from `count_term_occurrences`.
+        min_occurrences: Minimum occurrences to keep a term.
+
+    Returns:
+        Tuple: (cleaned_glossary: dict, removed_terms_log: list[str])
     """
     cleaned = {}
-    removed_terms_log = [] # Log of terms removed and why
-
-    # NOTE: The 'min_occurrences' parameter is parsed from CLI arguments but is not
-    # currently used in this function's filtering logic. Future implementation could use it.
+    removed_terms_log = [] # Log of removed terms and reasons
     
     for term, definition in glossary.items():
-        # Extract base term (lowercase, without brackets) for exclusion checks
-        # e.g., "Example Term [Original]" -> "example term"
-        base_term = term.split('[')[0].strip().lower() if '[' in term else term.lower()
+        # Base term for checks (lowercase, no bracket content)
+        base_check_term = term.split('[')[0].strip().lower() if '[' in term else term.lower()
         
         should_exclude = False
         reason = ""
         
-        # Rule 1: Check against the hardcoded list of common excluded terms
-        if base_term in excluded_terms:
+        # Exclusion rules (applied in order):
+        # 1. Common terms (from `get_excluded_terms()`).
+        if base_check_term in excluded_terms:
             should_exclude = True
             reason = "common term"
         
-        # Rule 2: Check for generic descriptions that often indicate non-essential terms
-        definition_lower = definition.lower()
-        generic_indicators = [
-            'a type of', 'a kind of', 'general term', 'common', 'ordinary',
-            'simple', 'basic', 'regular', 'normal', 'standard', 'typical',
-            'generic', 'minor character', 'side character', 'background',
-            'mentioned briefly', 'appears once', 'example of'
-        ]
-        if not should_exclude and any(indicator in definition_lower for indicator in generic_indicators):
-            should_exclude = True
-            reason = "generic description"
+        # 2. Generic descriptions (e.g., "a type of...").
+        if not should_exclude:
+            definition_lower = definition.lower()
+            generic_indicators = [ # Phrases indicating a generic, non-essential term
+                'a type of', 'a kind of', 'general term', 'common', 'ordinary',
+                'simple', 'basic', 'regular', 'normal', 'standard', 'typical',
+                'generic', 'minor character', 'side character', 'background',
+                'mentioned briefly', 'appears once', 'example of'
+            ]
+            if any(indicator in definition_lower for indicator in generic_indicators):
+                should_exclude = True
+                reason = "generic description"
+
+        # 3. Low occurrences (count < `min_occurrences`).
+        if not should_exclude:
+            count = term_occurrences.get(term, 0)
+            if count < min_occurrences:
+                should_exclude = True
+                reason = f"low occurrences (found {count}, min is {min_occurrences})"
         
-        # Rule 3: Override - Always keep terms that have an original language name in brackets
-        # This is a heuristic assuming such terms are specific and important proper nouns.
-        if '[' in term and ']' in term:
-            if should_exclude: # If it was marked for exclusion, log that it's being kept
+        # Override: Terms with original names in brackets (e.g., "Name [オリオン]") are always kept.
+        # This heuristic assumes such terms are specific proper nouns important for consistency.
+        if '[' in term and ']' in term: # Check for presence of brackets
+            if should_exclude: # Log if it overrides a previous exclusion reason
                 print(f"INFO: Keeping term '{term}' due to original name override, despite reason: {reason}")
-            should_exclude = False
+            should_exclude = False # Ensure it's not excluded
         
         if should_exclude:
             removed_terms_log.append(f"'{term}' (Reason: {reason})")
@@ -200,13 +228,20 @@ def clean_glossary(glossary: dict, excluded_terms: set, min_occurrences: int = 1
 def main():
     """
     Main entry point for the glossary cleanup script.
-    Parses arguments, loads glossary, cleans it, and saves the result.
+    Script entry point. Parses CLI args, loads data, cleans glossary, saves result.
     """
-    parser = argparse.ArgumentParser(description="Clean up bloated glossary files")
-    parser.add_argument("novel_directory", help="Path to novel directory containing glossary.txt")
-    parser.add_argument("--no-backup", action="store_true", help="Don't create backup file")
-    parser.add_argument("--dry-run", action="store_true", help="Show what would be removed without making changes")
-    parser.add_argument("--min-occurrences", type=int, default=1, help="Minimum occurrences to keep term (not implemented yet)")
+    parser = argparse.ArgumentParser(
+        description="Clean glossary.txt by removing common/generic/low-occurrence terms.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter # Shows default values in help
+    )
+    parser.add_argument("novel_directory",
+                        help="Path to novel directory (must contain glossary.txt, optionally a 'raw' subdir).")
+    parser.add_argument("--no-backup", action="store_true",
+                        help="Disable backup of the original glossary.txt.")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Show changes without modifying glossary.txt.")
+    parser.add_argument("--min-occurrences", type=int, default=1,
+                        help="Minimum times a term must appear in 'raw' texts to be kept.")
     
     args = parser.parse_args()
     
@@ -214,6 +249,29 @@ def main():
     if not novel_dir.is_dir():
         print(f"Error: Novel directory not found: {novel_dir}")
         sys.exit(1)
+
+    # Load raw novel text if available for occurrence counting
+    novel_text = ""
+    raw_dir_path = novel_dir / "raw" # Convention: novel_directory/raw/*.txt
+
+    if raw_dir_path.exists() and raw_dir_path.is_dir():
+        raw_files = sorted(list(raw_dir_path.glob("*.txt"))) # Sorted for consistent order
+        if raw_files:
+            print(f"Found {len(raw_files)} .txt files in {raw_dir_path} for term counting.")
+            for file_path in raw_files:
+                try:
+                    with file_path.open('r', encoding='utf-8') as f:
+                        novel_text += f.read() + "\n" # Add newline separator
+                except Exception as e:
+                    print(f"Error reading raw text file {file_path}: {e}")
+            if novel_text:
+                print(f"Loaded {len(novel_text)} characters from raw text files.")
+            else:
+                print("No content loaded from raw files (all empty or read errors).")
+        else:
+            print(f"No .txt files found in {raw_dir_path}.")
+    else:
+        print(f"Raw text directory not found ({raw_dir_path}), proceeding without term occurrence data.")
     
     glossary_path = novel_dir / "glossary.txt"
     if not glossary_path.exists():
@@ -229,13 +287,32 @@ def main():
         sys.exit(1)
     
     print(f"Original glossary contains {len(original_glossary)} terms")
-    
+
+    # Count term occurrences from raw text, if available
+    term_occurrences = {}
+    if novel_text:
+        glossary_keys = list(original_glossary.keys())
+        if glossary_keys:
+            term_occurrences = count_term_occurrences(novel_text, glossary_keys)
+            # Display a small sample of counts for user feedback
+            sample_counts = {k: term_occurrences[k] for k in list(term_occurrences)[:5] if k in term_occurrences}
+            if sample_counts:
+                print(f"Sample term counts: {sample_counts}")
+            else:
+                print("No occurrences found for sample terms or glossary is small/empty.")
+        else:
+            print("Glossary is empty, skipping occurrence counting.")
+    else:
+        # term_occurrences remains empty if no novel_text
+        print("No novel text loaded, term occurrence features will be skipped (min_occurrences=0 effectively).")
+
     # Clean glossary
     excluded_terms_set = get_excluded_terms()
     cleaned_glossary, removed_terms_log = clean_glossary(
         original_glossary,
         excluded_terms_set,
-        args.min_occurrences # Pass min_occurrences, though it's noted as unused in clean_glossary
+        term_occurrences, # Pass the loaded term_occurrences
+        args.min_occurrences
     )
     
     print(f"\nCleaned glossary would contain {len(cleaned_glossary)} terms.")
@@ -248,21 +325,26 @@ def main():
     
     if args.dry_run:
         print("\nDry run complete. No files were modified.")
-    else:
-        # Proceed with saving if there are changes and user confirms
-        if len(original_glossary) == len(cleaned_glossary):
-            print("\nNo changes to save. Glossary is already effectively clean or criteria didn't remove anything.")
-            sys.exit(0)
+        sys.exit(0) # Exit after dry run
 
-        if removed_terms_log: # Only ask for confirmation if terms were actually flagged for removal
+    # Proceed with saving if there are changes
+    if len(original_glossary) == len(cleaned_glossary):
+        print("\nNo changes to save. Glossary is already effectively clean or criteria didn't remove anything.")
+        sys.exit(0)
+
+    if removed_terms_log: # Only ask for confirmation if terms were actually flagged for removal
+        try:
             response = input(f"\nSave changes and remove {len(removed_terms_log)} terms from glossary? (y/N): ").strip().lower()
             if response.startswith('y'):
                 save_glossary(cleaned_glossary, glossary_path, backup=not args.no_backup)
                 print("Glossary cleanup complete!")
             else:
                 print("Cleanup cancelled by user.")
-        else: # Should ideally be caught by the len check above, but as a fallback.
-            print("\nNo terms were identified for removal. Nothing to save.")
+        except EOFError: # Handle non-interactive environments
+            print("\nNon-interactive mode detected or no input provided. No changes saved.")
+            print("Run interactively or pipe 'y' to save, e.g., 'echo \"y\" | python script.py ...'")
+    else: # Should ideally be caught by the len check above, but as a fallback.
+        print("\nNo terms were identified for removal. Nothing to save.")
 
 
 if __name__ == "__main__":

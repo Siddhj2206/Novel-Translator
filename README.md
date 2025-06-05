@@ -144,21 +144,22 @@ uv run cleanup_glossary.py /path/to/YourNovel
 # Clean without creating backup
 uv run cleanup_glossary.py /path/to/YourNovel --no-backup
 
-# Specify minimum occurrences (Note: this feature is not fully implemented in the script's logic yet)
+# Specify minimum occurrences
 uv run cleanup_glossary.py /path/to/YourNovel --min-occurrences 3
 ```
 
 **`cleanup_glossary.py` Arguments:**
 
-- `novel_directory`: Path to the novel directory containing `glossary.txt`.
-- `--no-backup`: (Flag) Prevents the creation of a backup file (`glossary.txt.backup`).
-- `--dry-run`: (Flag) Shows which terms would be removed without actually modifying the glossary file.
-- `--min-occurrences <N>`: (Integer, default: 1) Sets a minimum number of occurrences for a term to be kept. *Currently, this argument is parsed but not yet implemented in the exclusion logic of the script.*
+- `novel_directory`: Path to novel directory (containing `glossary.txt` and optionally `raw/` for occurrence counting).
+- `--no-backup`: (Flag) Skip creating a backup of `glossary.txt`.
+- `--dry-run`: (Flag) Show changes without modifying `glossary.txt`.
+- `--min-occurrences <N>`: (Integer, default: 1) Minimum times a term must appear in novel's raw text to be kept. Requires `raw/` directory with text files.
 
-The cleanup tool removes:
-- Terms with generic descriptions
-- Low-value entries that don't need translation consistency
-- Preserves terms with original language names in brackets
+The cleanup tool removes terms that are:
+- Common/generic (based on a predefined list).
+- Infrequent (below `--min-occurrences` count in novel text).
+- Defined with generic phrases (e.g., "a type of").
+It preserves terms with original language names in brackets (e.g., `Name [Kanji]`).
 
 **Note on `translator.py`'s `--strict_glossary` flag:**
 This flag makes the AI and the filtering logic much stricter about adding new terms during translation, limiting new additions to typically 0-1 per chapter. It internally uses the `MAX_NEW_TERMS_PER_CHAPTER_STRICT` constant.
