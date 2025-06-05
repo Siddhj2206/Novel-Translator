@@ -1,6 +1,6 @@
 # Novel Translator
 
-This script provides a command-line interface for translating novel chapters using Gemini. It supports translation with glossary management, retry logic, and per-novel configuration through config files.
+This script provides a command-line interface for translating novel chapters using different AI providers. It supports translation with glossary management, retry logic, and per-novel configuration through config files.
 
 ## Features
 
@@ -16,7 +16,10 @@ This script provides a command-line interface for translating novel chapters usi
    uv sync
    ```
 
-2. **Get a Google AI Studio API Key**
+2. **Get an API Key**
+   - **Gemini (default):** Get a Google AI Studio API key
+   - **OpenAI:** Get an OpenAI API key
+   - **Anthropic:** Get an Anthropic API key
 
 ## Directory Structure
 
@@ -34,12 +37,34 @@ Create `config.json` in your novel directory:
 
 ```json
 {
+  "api_key": "YOUR_API_KEY_HERE",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash-preview-05-20",
   "base_prompt": "Translate this fantasy novel chapter to natural English.",
   "raw_folder": "raw",
-  "translated_folder": "tl",
-  "api_key": "YOUR_GOOGLE_AI_STUDIO_API_KEY"
+  "translated_folder": "tl"
 }
 ```
+
+### Configuration Options
+
+- **`provider`** (optional): AI provider to use
+  - `"gemini"` (default) - Uses Google's Gemini models
+  - `"openai"` - Uses OpenAI's GPT models
+  - `"anthropic"` - Uses Anthropic's Claude models
+  - `"other"` - Custom provider (requires `base_url` and `model` in config)
+- **`model`** (optional): Specific model to use. If not specified, uses provider's default:
+  - Gemini: `gemini-2.5-flash-preview-05-20`
+  - OpenAI: `gpt-4.1-nano-2025-04-14`
+  - Anthropic: `claude-sonnet-4-20250514`
+  - Other: Required when using `"other"` provider
+- **`api_key`**: Your API key for the selected provider
+- **`base_url`** (required for "other" provider): Custom API endpoint URL
+- **`base_prompt`**: Custom translation prompt
+- **`raw_folder`**: Folder containing raw chapter files
+- **`translated_folder`**: Output folder for translations
+
+**Note:** Base URLs are built into the program for standard providers - you only need to specify the provider name. For custom endpoints, use the "other" provider with your own `base_url`.
 
 ## Usage
 
@@ -58,6 +83,9 @@ uv run translator.py /path/to/YourNovel --no_glossary
 
 # Skip glossary review prompt
 uv run translator.py /path/to/YourNovel --skip_glossary_review
+
+# Use strict glossary filtering (max 1 new term per chapter)
+uv run translator.py /path/to/YourNovel --strict_glossary
 ```
 
 ## Arguments
@@ -70,6 +98,7 @@ uv run translator.py /path/to/YourNovel --skip_glossary_review
 - `--regenerate_glossary` - Rebuild glossary from scratch
 - `--no_glossary` - Disable glossary usage
 - `--skip_glossary_review` - Skip user confirmation after generating initial glossary
+- `--strict_glossary` - Use stricter glossary filtering (max 1 new term per chapter)
 
 ## Glossary
 
@@ -82,5 +111,31 @@ The tool automatically creates a `glossary.txt` file with critical terms for tra
 
 Use `--regenerate_glossary` to rebuild, `--no_glossary` to disable, or `--skip_glossary_review` to bypass the review prompt.
 
+## Glossary Management
+
+- **Strict limits** on new terms per chapter (2 by default, 1 with `--strict_glossary`)
+- **Smart prioritization** based on term frequency and original language names
+- **Enhanced prompts** that strongly discourage unnecessary additions
+
+### Cleaning Existing Glossaries
+
+If you have an existing bloated glossary, use the cleanup utility:
+
+```bash
+# Preview what would be removed
+uv run cleanup_glossary.py /path/to/YourNovel --dry-run
+
+# Clean the glossary (creates backup automatically)
+uv run cleanup_glossary.py /path/to/YourNovel
+
+# Clean without creating backup
+uv run cleanup_glossary.py /path/to/YourNovel --no-backup
+```
+
+The cleanup tool removes:
+- Terms with generic descriptions
+- Low-value entries that don't need translation consistency
+- Preserves terms with original language names in brackets
+
 **Note:**
-The glossary may get bloated over time as gemini likes to add everything to it even though it has been told to only add the essentials. It is advised to clean up the glossary.txt file from time to time.
+Use `--strict_glossary` for more aggressive filtering if needed (max 1 new term per chapter instead of 2).
