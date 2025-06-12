@@ -27,8 +27,8 @@ This script provides a command-line interface for translating book chapters usin
 YourBook/
 ├── config.json           # Book configuration
 ├── glossary.txt          # Auto-generated terms (optional)
-├── raw/                  # Raw chapter files (.md)
-└── tl/                   # Output folder
+├── raw/                  # Raw chapter files (.md, .txt)
+└── translated/           # Output folder
 ```
 
 ## Configuration
