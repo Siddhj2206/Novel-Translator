@@ -159,7 +159,7 @@ wheels = [
 ]
 
 [[package]]
-name = "novel-translator"
+name = "book-translator"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
