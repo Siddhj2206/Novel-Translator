@@ -1,12 +1,12 @@
-# Novel Translator
+# Book Translator
 
-This script provides a command-line interface for translating novel chapters using different AI providers. It supports translation with glossary management, retry logic, and per-novel configuration through config files.
+This script provides a command-line interface for translating book chapters using different AI providers. It supports translation with glossary management, retry logic, and per-book configuration through config files.
 
 ## Features
 
 - **Glossary:** Automatically maintains character names, places, and unique terms
 - **Format Preservation:** Keeps paragraph structure and dialogue formatting
-- **Per-Novel Config:** Separate settings for each novel via `config.json`
+- **Per-Book Config:** Separate settings for each book via `config.json`
 - **Skip Existing:** Only translates new chapters
 
 ## Setup
@@ -24,23 +24,23 @@ This script provides a command-line interface for translating novel chapters usi
 ## Directory Structure
 
 ```
-YourNovel/
-├── config.json           # Novel configuration
+YourBook/
+├── config.json           # Book configuration
 ├── glossary.txt          # Auto-generated terms (optional)
-├── raw/                  # Raw chapter files (.txt)
-└── tl/                   # Output folder (auto-created)
+├── raw/                  # Raw chapter files (.md)
+└── tl/                   # Output folder
 ```
 
 ## Configuration
 
-Create `config.json` in your novel directory:
+Create `config.json` in your book directory:
 
 ```json
 {
   "api_key": "YOUR_API_KEY_HERE",
   "provider": "gemini",
   "model": "gemini-2.5-flash-preview-05-20",
-  "base_prompt": "Translate this fantasy novel chapter to natural English.",
+  "base_prompt": "Translate this fantasy book chapter to natural English.",
   "raw_folder": "raw",
   "translated_folder": "tl"
 }
@@ -70,27 +70,27 @@ Create `config.json` in your novel directory:
 
 ```bash
 # Basic usage
-uv run translator.py /path/to/YourNovel
+uv run translator.py /path/to/YourBook
 
 # With custom API key
-uv run translator.py /path/to/YourNovel --api_key YOUR_KEY
+uv run translator.py /path/to/YourBook --api_key YOUR_KEY
 
 # Regenerate glossary
-uv run translator.py /path/to/YourNovel --regenerate_glossary
+uv run translator.py /path/to/YourBook --regenerate_glossary
 
 # Disable glossary
-uv run translator.py /path/to/YourNovel --no_glossary
+uv run translator.py /path/to/YourBook --no_glossary
 
 # Skip glossary review prompt
-uv run translator.py /path/to/YourNovel --skip_glossary_review
+uv run translator.py /path/to/YourBook --skip_glossary_review
 
 # Use strict glossary filtering (max 1 new term per chapter)
-uv run translator.py /path/to/YourNovel --strict_glossary
+uv run translator.py /path/to/YourBook --strict_glossary
 ```
 
 ## Arguments
 
-- `novel_directory` - Path to novel root directory
+- `book_directory` - Path to book root directory
 - `--api_key` - Override API key from config
 - `--raw_folder` - Override raw chapters folder
 - `--translated_folder` - Override output folder
@@ -123,13 +123,13 @@ If you have an existing bloated glossary, use the cleanup utility:
 
 ```bash
 # Preview what would be removed
-uv run cleanup_glossary.py /path/to/YourNovel --dry-run
+uv run cleanup_glossary.py /path/to/YourBook --dry-run
 
 # Clean the glossary (creates backup automatically)
-uv run cleanup_glossary.py /path/to/YourNovel
+uv run cleanup_glossary.py /path/to/YourBook
 
 # Clean without creating backup
-uv run cleanup_glossary.py /path/to/YourNovel --no-backup
+uv run cleanup_glossary.py /path/to/YourBook --no-backup
 ```
 
 The cleanup tool removes:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Novel Translator
+Book Translator
 """
 
 import argparse
@@ -48,7 +48,6 @@ DEFAULT_PROVIDER = "gemini"
 DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20"
 
 
-
 # JSON schema for structured output
 TRANSLATION_SCHEMA = {
     "type": "object",
@@ -87,11 +86,11 @@ def log(msg: str) -> None:
 
 
 class Config:
-    """Configuration manager for novel translation settings."""
+    """Configuration manager for book translation settings."""
 
-    def __init__(self, novel_root: Path, args: argparse.Namespace):
+    def __init__(self, book_root: Path, args: argparse.Namespace):
         """Initialize configuration by loading and resolving all settings."""
-        self.novel_root = novel_root
+        self.book_root = book_root
         self.cli = args
         self._load_config_file()
         self._resolve_api_key()
@@ -102,7 +101,7 @@ class Config:
 
     def _load_config_file(self) -> None:
         """Load configuration from config.json if it exists."""
-        self.config_path = self.novel_root / "config.json"
+        self.config_path = self.book_root / "config.json"
         if self.config_path.exists():
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -158,7 +157,7 @@ class Config:
     def _resolve_base_prompt(self) -> None:
         """Resolve base prompt from CLI args or config file."""
         default_prompt = (
-            "Translate this novel chapter from Japanese to natural, fluent English."
+            "Translate this book chapter from Japanese to natural, fluent English."
         )
         self.base_prompt = self.cli.base_prompt or self.file.get(
             "base_prompt", default_prompt
@@ -174,11 +173,11 @@ class Config:
             or self.file.get("translated_folder", "translated")
         )
 
-        # Make paths absolute relative to novel root
+        # Make paths absolute relative to book root
         if not self.raw_folder.is_absolute():
-            self.raw_folder = self.novel_root / self.raw_folder
+            self.raw_folder = self.book_root / self.raw_folder
         if not self.translated_folder.is_absolute():
-            self.translated_folder = self.novel_root / self.translated_folder
+            self.translated_folder = self.book_root / self.translated_folder
 
         # Validate raw folder exists
         if not self.raw_folder.exists():
@@ -191,7 +190,7 @@ class Config:
     def _setup_glossary(self) -> None:
         """Setup glossary configuration and paths."""
         self.use_glossary = not self.cli.no_glossary
-        self.glossary_path = self.novel_root / "glossary.txt"
+        self.glossary_path = self.book_root / "glossary.txt"
 
         if self.use_glossary:
             self._load_glossary()
@@ -275,6 +274,11 @@ def build_translation_prompt(
     return f"""{base_prompt}{glossary_section}
 
 FORMATTING REQUIREMENTS:
+- Format the output as proper Markdown
+- Start with a chapter heading using # (H1) that includes the chapter number and title if present in the original text
+- If the original text has a chapter number/title at the beginning, extract it and format as: # Chapter X: Title Name
+- If only a chapter number is present, format as: # Chapter X
+- If no clear chapter identifier exists, use: # Chapter
 - Preserve the original paragraph structure and line breaks
 - Maintain proper spacing between paragraphs
 - Keep dialogue formatting intact
@@ -423,7 +427,7 @@ def generate_glossary_from_text(
         else ""
     )
 
-    prompt = f"""Analyze this novel text and identify ONLY the absolute most essential proper nouns that MUST appear in a glossary. Be EXTREMELY restrictive - only include terms that meet ALL these criteria:
+    prompt = f"""Analyze this book text and identify ONLY the absolute most essential proper nouns that MUST appear in a glossary. Be EXTREMELY restrictive - only include terms that meet ALL these criteria:
 
 1. The term appears multiple times OR is clearly a main character/location
 2. The term has a specific non-English name that needs consistent translation
@@ -601,14 +605,14 @@ def generate_initial_glossary(config: Config) -> None:
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Translate novel chapters",
+        description="Translate book chapters",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
-        "novel_directory",
+        "book_directory",
         type=Path,
-        help="Path to novel root directory containing config.json and chapters.",
+        help="Path to book root directory containing config.json and chapters.",
     )
 
     parser.add_argument(
@@ -618,12 +622,12 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--raw_folder",
-        help="Path to raw chapter files (overrides config; default '<novel>/raw').",
+        help="Path to raw chapter files (overrides config; default '<book>/raw').",
     )
 
     parser.add_argument(
         "--translated_folder",
-        help="Where to save translations (overrides config; default '<novel>/translated').",
+        help="Where to save translations (overrides config; default '<book>/translated').",
     )
 
     parser.add_argument(
@@ -662,13 +666,13 @@ def main() -> None:
     """Main entry point for the translator."""
     args = parse_args()
 
-    # Validate novel directory
-    if not args.novel_directory.exists():
-        log(f"Error: Novel directory '{args.novel_directory}' does not exist")
+    # Validate book directory
+    if not args.book_directory.exists():
+        log(f"Error: Book directory '{args.book_directory}' does not exist")
         sys.exit(1)
 
     # Initialize configuration
-    config = Config(args.novel_directory, args)
+    config = Config(args.book_directory, args)
 
     # Handle glossary regeneration
     if args.regenerate_glossary:
@@ -692,7 +696,7 @@ def main() -> None:
     # Translate chapters
     translated_count = 0
     for chapter_file in chapter_files:
-        output_file = config.translated_folder / f"{chapter_file.stem}.txt"
+        output_file = config.translated_folder / f"{chapter_file.stem}.md"
 
         # Skip if already translated
         if output_file.exists():
